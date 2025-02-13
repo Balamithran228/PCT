@@ -57,9 +57,11 @@ class Project(models.Model):
     project_id = models.AutoField(primary_key=True)
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
     project_name = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
     project_progress = models.IntegerField()
     start_date = models.DateField()
     end_date = models.DateField()
+    team_lead = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name="leading_projects")
  
     def __str__(self):
         return self.project_name
@@ -71,13 +73,14 @@ class Technology(models.Model):
     def __str__(self):
         return self.name
  
-# Project Employees Table (Explicit Relationship)
+# Project Employees Table
 class ProjectEmployee(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     employee = models.ForeignKey(
         Employee, on_delete=models.CASCADE, related_name="project_assignments"
     )
     assigned_date = models.DateField(auto_now_add=True)
+    is_team_lead = models.BooleanField(default=False) 
  
     class Meta:
         unique_together = ("project", "employee")  # Ensuring unique project-employee pair
@@ -86,7 +89,7 @@ class ProjectEmployee(models.Model):
         return f"{self.employee.employee_name} in {self.project.project_name}"
  
  
-# Project Technology Table (Explicit Relationship)
+# Project Technology Table 
 class ProjectTechnology(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     technology = models.ForeignKey(Technology, on_delete=models.CASCADE)
