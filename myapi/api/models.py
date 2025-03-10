@@ -1,6 +1,13 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 
+
+class Team(models.Model):
+    name = models.CharField(max_length=255, unique=True)  # Example: "Data and AI", "AI Lab", "Salesforce"
+
+    def __str__(self):
+        return self.name
+    
 # Custom Manager
 class EmployeeManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -25,10 +32,13 @@ class EmployeeManager(BaseUserManager):
 
 # Custom User Model
 class Employee(AbstractBaseUser, PermissionsMixin):
-    employee_id = models.CharField(max_length=50, primary_key=True)
+    id = models.AutoField(primary_key=True)
+    employee_id = models.CharField(max_length=50, unique=True, blank=True, null=True)
     employee_name = models.CharField(max_length=255)
-    employee_role = models.CharField(max_length=255)
+    designation = models.CharField(max_length=255)
     email = models.EmailField(unique=True)
+    team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True, related_name="employees")
+
 
     # Built-in fields
     is_active = models.BooleanField(default=True)
@@ -38,10 +48,18 @@ class Employee(AbstractBaseUser, PermissionsMixin):
     objects = EmployeeManager()
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["employee_name", "employee_role"]
+    REQUIRED_FIELDS = ["employee_name", "designation","employee_id"]
+    
+    # Get Primary Skills
+    def get_primary_skills(self):
+        return self.skills.filter(is_primary=True)
 
+    # Get Secondary Skills
+    def get_secondary_skills(self):
+        return self.skills.filter(is_primary=False)
+    
     def __str__(self):
-        return self.employee_name
+        return f"{self.employee_name} ({self.team.name if self.team else 'No Team'})"
 
 
 # Clients Model
@@ -61,7 +79,6 @@ class Project(models.Model):
     project_progress = models.IntegerField()
     start_date = models.DateField()
     end_date = models.DateField()
-    team_lead = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name="leading_projects")
  
     def __str__(self):
         return self.project_name
@@ -80,13 +97,13 @@ class ProjectEmployee(models.Model):
         Employee, on_delete=models.CASCADE, related_name="project_assignments"
     )
     assigned_date = models.DateField(auto_now_add=True)
-    is_team_lead = models.BooleanField(default=False) 
+    role_in_project = models.CharField(max_length=255)  # Updated from is_team_lead
  
     class Meta:
         unique_together = ("project", "employee")  # Ensuring unique project-employee pair
  
     def __str__(self):
-        return f"{self.employee.employee_name} in {self.project.project_name}"
+        return f"{self.employee.employee_name} - {self.role_in_project} in {self.project.project_name}"
  
  
 # Project Technology Table 
@@ -99,3 +116,33 @@ class ProjectTechnology(models.Model):
  
     def __str__(self):
         return f"{self.project.project_name} uses {self.technology.name}"
+
+class EmployeeSkill(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="skills")
+    technology = models.ForeignKey(Technology, on_delete=models.CASCADE)
+    is_primary = models.BooleanField(default=False)  # True = Primary, False = Secondary
+
+    class Meta:
+        unique_together = ("employee", "technology")  # Prevent duplicate skills
+
+    def __str__(self):
+        skill_type = "Primary" if self.is_primary else "Secondary"
+        return f"{self.employee.employee_name} - {self.technology.name} ({skill_type})"
+   
+class Certification(models.Model):
+    name = models.CharField(max_length=255)
+    issued_by = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+
+class EmployeeCertificate(models.Model):
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE)
+    certification = models.ForeignKey(Certification, on_delete=models.CASCADE)
+    issue_date = models.DateField()
+    expiry_date = models.DateField(null=True, blank=True)
+    certificate_file = models.FileField(upload_to='certificates/', null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.employee.employee_name} - {self.certification.name}"
+
